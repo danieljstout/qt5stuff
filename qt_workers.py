@@ -15,9 +15,9 @@ class Worker(QRunnable):
 
     @pyqtSlot()
     def monitorDataThread(self, *args, **kwargs):
-        print("Do the thing you want to do in a thread")
+        print("Doing stuff....")
         sleep(20)
-        print("I found data")
+        print("I totally just did stuff")
         self.signals.new_data.emit()
 
 
@@ -32,17 +32,8 @@ class myMainWindow(QMainWindow):
         self.setGeometry(0, 0, 420, 420)
         self.setWindowTitle("Workers GTFI")
         self.quit_button(self, 0,0)
-        # self.monitor_data_button(self, 210, 210)
+        self.monitor_data_button(self, 210, 210)
         self.show()
-
-
-    def monitor_data(self):
-        self.monitor_data_worker = Worker()
-        self.monitor_data_worker.new_data.connect(self.other_function)
-        self.threadpool.start(self.monitor_data_worker.monitorDataThread)
-
-    def other_function(self):
-        print("Other function is getting called!")
 
     def quit_button(self, widget, x, y):
         self.quitButton = QPushButton(widget)
@@ -51,8 +42,27 @@ class myMainWindow(QMainWindow):
         self.quitButton.setStyleSheet("background-color: red")
         self.quitButton.clicked.connect(self.quit_button_click)
 
+    def monitor_data_button(self, widget, x, y):
+        self.quitButton = QPushButton(widget)
+        self.quitButton.setText("Begin monitoring")
+        self.quitButton.move(x, y)
+        self.quitButton.setStyleSheet("background-color: green")
+        self.quitButton.clicked.connect(self.monitor_data)    
+
+
+    ### Event handlers AKA slots ###
+
     def quit_button_click(self):
         exit()
+
+    def monitor_data(self):
+        print("Kicking off the worker")
+        self.monitor_data_worker = Worker()
+        self.monitor_data_worker.signals.new_data.connect(self.update_ui)
+        self.threadpool.start(self.monitor_data_worker.monitorDataThread)
+
+    def update_ui(self):
+        print("Now that we're done doing the stuff, this other thing happened on the UI!")
 
 
 if __name__ == '__main__':
