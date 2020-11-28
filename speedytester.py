@@ -4,40 +4,82 @@ from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 import speedtest
 
-class WorkerSignals(QObject):
-    new_data = pyqtSignal()
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
 
-class Worker(QRunnable):
-    def __init__(self, *args, **kwargs):
+import time 
+import traceback, sys
+
+class WorkerSignals(QObject): 
+    ''' Defines the signals available from a running worker thread.
+
+    Supported signals are:
+
+    finished
+        No data
+
+    error
+        `tuple` (exctype, value, traceback.format_exc() )
+
+    result
+        `object` data returned from processing, anything
+
+    progress
+        `int` indicating % progress
+    progress_txt
+        `str` indicating what step the worker is working on
+
+    '''
+    finished = pyqtSignal()
+    error = pyqtSignal(tuple)
+    result = pyqtSignal(object)
+    progress = pyqtSignal(int)
+    progress_txt = pyqtSignal(str)
+
+class Worker(QRunnable): 
+    ''' Worker thread
+    python
+
+    Inherits from QRunnable to handler worker thread setup, signals and wrap-up.
+
+    :param callback: The function callback to run on this worker thread. Supplied args and
+                     kwargs will be passed through to the runner.
+    :type callback: function
+    :param args: Arguments to pass to the callback function
+    :param kwargs: Keywords to pass to the callback function
+
+    '''
+    def __init__(self, fn, *args, **kwargs):
         super(Worker, self).__init__()
+
+        # Store constructor arguments (re-used for processing)
+        self.fn = fn
         self.args = args
         self.kwargs = kwargs
         self.signals = WorkerSignals()
 
-    @pyqtSlot()
-    def speedTestThread(self, *args, **kwargs):
-        print("Doing stuff....")
-        print("Connecting...")
-        # attempt speed test
-        servers = []
-        threads = 1
+        # Add the callback to our kwargs
+        self.kwargs['progress_percentage_callback'] = self.signals.progress
+        self.kwargs['progress_text_callback'] = self.signals.progress_txt
 
-        s = speedtest.Speedtest()
-        print("Finding servers...")
-        s.get_servers(servers)
-        print("Determining best server...")
-        s.get_best_server()
-        print("Testing download speed...")
-        s.download(threads=threads)
-        print("Testing upload speed...")
-        s.upload(threads=threads)
-        # s.results.share()
-        results_dict = s.results.dict()
-        download_simple = f"{results_dict['download'] / 1_000_000}MBps"
-        # self.download_result["text"] = download_simple
-        print(f"Your download speed is {round((results_dict['download'] / 1_000_000), 2)} MBps")
-        self.signals.new_data.emit()
-        print("I totally just did stuff")
+    @pyqtSlot()
+    def run(self):
+        '''
+        Initialise the runner function with passed args, kwargs.
+        '''
+
+        # Retrieve args/kwargs here; and fire processing using them
+        try:
+            result = self.fn(*self.args, **self.kwargs)
+        except:
+            traceback.print_exc()
+            exctype, value = sys.exc_info()[:2]
+            self.signals.error.emit((exctype, value, traceback.format_exc()))
+        else:
+            self.signals.result.emit(result)  # Return the result of the processing
+        finally:
+            self.signals.finished.emit()  # Done
 
 
 class myMainWindow(QMainWindow):
@@ -45,7 +87,7 @@ class myMainWindow(QMainWindow):
         # super(myMainWindow, self).__init__(parent, *args, **kwargs)
         super().__init__()
         self.threadpool = QThreadPool()
-        # self.quit_button = 
+        self.window()
 
     def window(self):
         self.setGeometry(0, 0, 420, 420)
@@ -69,7 +111,7 @@ class myMainWindow(QMainWindow):
         self.SpeedTestButton.move(x, y)
         self.SpeedTestButton.setStyleSheet("background-color: blue")
         self.SpeedTestButton.setGeometry(x, y, 200, 42)
-        self.SpeedTestButton.clicked.connect(self.speed_test)
+        self.SpeedTestButton.clicked.connect(self.start_speed_test)
 
     def results_lbl_el(self, widget, x, y):
         self.resultsLabel = QLabel(widget)
@@ -82,11 +124,33 @@ class myMainWindow(QMainWindow):
     def quit_button_click(self):
         exit()
 
-    def speed_test(self):
+    def start_speed_test(self):
         self.results_lbl_set_text("Testing Internet speed of things")
-        self.speed_test_worker = Worker()
-        self.speed_test_worker.signals.new_data.connect(self.update_ui)
-        self.threadpool.start(self.speed_test_worker.speedTestThread)
+        self.speed_test_worker = Worker(self.speed_test)
+        self.speed_test_worker.signals.progress_txt.connect(self.results_lbl_set_text)
+        self.speed_test_worker.signals.result.connect(self.results_lbl_set_text)
+        self.threadpool.start(self.speed_test_worker)
+
+    def speed_test(self, progress_text_callback, progress_percentage_callback):
+        progress_text_callback.emit("Connecting...")
+        # attempt speed test
+        servers = []
+        threads = 1
+
+        s = speedtest.Speedtest()
+        progress_text_callback.emit("Finding servers...")
+        s.get_servers(servers)
+        progress_text_callback.emit("Determining best server...")
+        s.get_best_server()
+        progress_text_callback.emit("Testing download speed...")
+        s.download(threads=threads)
+        progress_text_callback.emit("Testing upload speed...")
+        s.upload(threads=threads)
+        # s.results.share()
+        results_dict = s.results.dict()
+        download_simple = f"{results_dict['download'] / 1_000_000}MBps"
+        # self.download_result["text"] = download_simple
+        return f"Your download speed is {round((results_dict['download'] / 1_000_000), 2)} MBps"
 
     def results_lbl_set_text(self, str):
         self.resultsLabel.setText(str)
@@ -99,5 +163,4 @@ class myMainWindow(QMainWindow):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     the_best_worker = myMainWindow()
-    the_best_worker.window()
     sys.exit(app.exec_())
