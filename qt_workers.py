@@ -43,11 +43,12 @@ class myMainWindow(QMainWindow):
         self.quitButton.clicked.connect(self.quit_button_click)
 
     def monitor_data_button(self, widget, x, y):
-        self.quitButton = QPushButton(widget)
-        self.quitButton.setText("Begin monitoring")
-        self.quitButton.move(x, y)
-        self.quitButton.setStyleSheet("background-color: green")
-        self.quitButton.clicked.connect(self.monitor_data)    
+        self.MonitorDataButton = QPushButton(widget)
+        self.MonitorDataButton.setText("Begin monitoring")
+        self.MonitorDataButton.move(x, y)
+        self.MonitorDataButton.setStyleSheet("background-color: green")
+        self.MonitorDataButton.clicked.connect(self.monitor_data)
+        
 
 
     ### Event handlers AKA slots ###
